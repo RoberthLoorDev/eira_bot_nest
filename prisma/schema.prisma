@@ -1,0 +1,151 @@
+// =============================================================
+// Mia — Bot Contable de Telegram
+// schema.prisma
+// PostgreSQL via Neon (serverless)
+// Prisma 5.x
+// =============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================
+// USERS
+// Cada usuario se registra la primera vez que escribe al bot.
+// telegram_id es BIGINT porque los IDs de Telegram superan
+// el límite de un INT de 32 bits.
+// =============================================================
+model User {
+  id         String   @id @default(uuid()) @db.Uuid
+  telegramId BigInt   @unique @map("telegram_id")
+  name       String   @db.VarChar(100)
+  language   String   @default("es") @db.VarChar(10)
+  timezone   String   @default("America/Guayaquil") @db.VarChar(50)
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relaciones
+  categories        Category[]
+  records           Record[]
+  conversationState ConversationState?
+
+  @@index([telegramId], name: "idx_users_telegram_id")
+  @@map("users")
+}
+
+// =============================================================
+// CATEGORIES
+// Cada usuario tiene sus propias categorías.
+// Las 3 por defecto (gasto, ingreso, ahorro) se insertan
+// automáticamente al registrar al usuario.
+// budget_limit es opcional: NULL = sin límite.
+// Un mismo usuario no puede tener dos categorías con el mismo nombre.
+// =============================================================
+model Category {
+  id          String       @id @default(uuid()) @db.Uuid
+  userId      String       @map("user_id") @db.Uuid
+  name        String       @db.VarChar(100)
+  type        CategoryType
+  budgetLimit Decimal?     @map("budget_limit") @db.Decimal(10, 2)
+  emoji       String?      @db.VarChar(10)
+  isDefault   Boolean      @default(false) @map("is_default")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relaciones
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  records Record[]
+
+  @@unique([userId, name], name: "uq_categories_user_name")
+  @@index([userId], name: "idx_categories_user_id")
+  @@map("categories")
+}
+
+// =============================================================
+// RECORDS
+// Registros financieros del usuario.
+// occurred_at: fecha del evento — la controla el usuario.
+//   Por defecto es now() en la timezone del usuario, pero puede
+//   especificar cualquier fecha (ej: "el gasto fue ayer").
+// created_at: timestamp inmutable del sistema.
+// is_deleted: soft delete. Los registros financieros nunca
+//   se eliminan físicamente de la BD.
+// user_id es redundante (se puede inferir via category) pero
+//   se incluye para filtrar directamente en todas las queries
+//   sin hacer joins, por seguridad y rendimiento.
+// =============================================================
+model Record {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  categoryId  String   @map("category_id") @db.Uuid
+  amount      Decimal  @db.Decimal(10, 2)
+  description String   @db.VarChar(500)
+  notes       String?  @db.Text
+  occurredAt  DateTime @map("occurred_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  isDeleted   Boolean  @default(false) @map("is_deleted")
+
+  // Relaciones
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@index([userId], name: "idx_records_user_id")
+  @@index([categoryId], name: "idx_records_category_id")
+  @@index([occurredAt], name: "idx_records_occurred_at")
+  @@index([userId, occurredAt], name: "idx_records_user_occurred")
+  @@index([userId, isDeleted], name: "idx_records_user_deleted")
+  @@map("records")
+}
+
+// =============================================================
+// CONVERSATION STATE
+// Una sola fila por usuario activo.
+// Guarda el estado pendiente de la conversación para manejar
+// flujos de 2-3 turnos sin mandar historial a la IA.
+//
+// pending_action: qué está esperando resolver el bot.
+// pending_data:   datos del flujo en curso (JSON flexible).
+// last_bot_msg:   último mensaje del bot, se usa como contexto
+//                 mínimo para el siguiente turno si es necesario.
+// expires_at:     el estado expira (por defecto 5 minutos).
+//                 Al inicio de cada request se verifica si expiró.
+//
+// Valores posibles de pending_action:
+//   awaiting_user_name        → registro inicial, esperando nombre
+//   awaiting_category_info    → usuario dijo "crea una categoría" sin dar nombre
+//   confirm_create_category   → categoría nueva detectada, esperando confirmación
+//   confirm_delete_record     → esperando confirmación para soft delete
+//   confirm_delete_category   → esperando confirmación para eliminar categoría
+//   select_record             → múltiples resultados, esperando que elija uno
+// =============================================================
+model ConversationState {
+  userId        String    @id @map("user_id") @db.Uuid
+  pendingAction String?   @map("pending_action") @db.VarChar(100)
+  pendingData   Json?     @map("pending_data")
+  lastBotMsg    String?   @map("last_bot_msg") @db.Text
+  expiresAt     DateTime? @map("expires_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relaciones
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("conversation_state")
+}
+
+// =============================================================
+// ENUMS
+// =============================================================
+
+enum CategoryType {
+  gasto
+  ingreso
+  ahorro
+
+  @@map("category_type")
+}
