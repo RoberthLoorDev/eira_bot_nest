@@ -96,3 +96,9 @@ ALTER TABLE "records" ADD CONSTRAINT "records_category_id_fkey" FOREIGN KEY ("ca
 
 -- AddForeignKey
 ALTER TABLE "conversation_state" ADD CONSTRAINT "conversation_state_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddColumn
+ALTER TABLE "categories" ADD COLUMN "deleted_at" TIMESTAMPTZ;
+
+-- AddColumn
+ALTER TABLE "records" ADD COLUMN "deleted_at" TIMESTAMPTZ;

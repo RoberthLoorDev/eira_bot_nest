@@ -56,6 +56,7 @@ model Category {
   isDefault   Boolean      @default(false) @map("is_default")
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz
 
   // Relaciones
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -90,6 +91,7 @@ model Record {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
   isDeleted   Boolean  @default(false) @map("is_deleted")
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
 
   // Relaciones
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
