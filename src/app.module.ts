@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { TelegramModule } from './telegram/telegram.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { TelegramModule } from './telegram/telegram.module';
     }),
     PrismaModule,
     TelegramModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
