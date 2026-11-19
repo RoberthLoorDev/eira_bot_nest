@@ -23,6 +23,16 @@ export class CategoriesRepository {
     });
   }
 
+  async findActiveById(
+    userId: string,
+    categoryId: string,
+  ): Promise<CategoryItem | null> {
+    return this.prisma.category.findFirst({
+      where: { id: categoryId, userId, deletedAt: null },
+      select: CATEGORY_SELECT,
+    });
+  }
+
   async findActiveByNameInsensitive(
     userId: string,
     name: string,

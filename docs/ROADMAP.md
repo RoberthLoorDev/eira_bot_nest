@@ -12,12 +12,12 @@
 
 ## 1. Onboarding, usuarios y flujo conversacional
 - [ ] **Términos y registro inicial**: al detectar un `telegramId` nuevo, mostrar Términos y Condiciones (link rápido en Notion al inicio, página propia después) antes de pedir el nombre; saludo cordial a usuarios existentes.
-- [ ] **Zonas horarias (UTC)**: almacenar siempre en UTC y convertir fechas a la timezone del usuario (si no se indica fecha ni viene en factura, usar fecha/hora actual).
-- [ ] **Menú guiado + confirmación conversacional**: botones opcionales en Telegram (crear categoría, registrar ingreso/gasto/ahorro) + tarjeta de confirmación al guardar (mostrando datos y hora) con opción rápida de corregir (ej. *"guárdalo en presupuesto Navidad"*).
+- [ ] **Zonas horarias (UTC)**: ✅ guardado en UTC y conversión/formato a `user.timezone` con `date-fns-tz` en `records-ai`; pendiente: permitir cambiar la timezone al usuario.
+- [ ] **Menú guiado + confirmación conversacional**: ✅ menú completo, botones de movimientos y tarjeta previa con `[✅ Guardar] [🏷️ Cambiar categoría] [❌ Cancelar]`; pendiente: corregir categoría después de guardar.
 
 ## 2. Categorías, movimientos y consultas
-- [ ] **Categorías flexibles**: categorías por defecto (`gasto`, `ingreso`, `ahorro`, evaluar `inversion`) + crear, listar (*"recuérdame mis categorías"*) y ajustar por menú o lenguaje natural; si falta categoría al registrar, preguntar listando las disponibles.
-- [ ] **Registros por texto natural**: crear movimientos con contexto completo en 1 llamada de IA (ej. *"saldo de $25 de mando PS5 en Navidad"*).
+- [ ] **Categorías flexibles**: ✅ categorías por defecto (`gasto`, `ingreso`, `ahorro`), crear/listar por menú y elegir/crear por botones si falta al registrar (`records-ai`); pendiente: evaluar `inversion` y listar/ajustar por lenguaje natural (*"recuérdame mis categorías"*).
+- [x] **Registros por texto natural**: crear movimientos con contexto completo en 1 llamada de IA (ej. *"saldo de $25 de mando PS5 en Navidad"*).
 - [ ] **Consultas en lenguaje natural**: responder preguntas sobre gastos/ingresos por categoría o período (*hoy, ayer, últimos 10/15/30 días, mes pasado*).
 
 ## 3. Inteligencia financiera, alertas y reportes

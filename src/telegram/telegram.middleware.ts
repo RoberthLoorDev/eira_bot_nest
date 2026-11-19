@@ -34,6 +34,7 @@ export class TelegramMiddleware {
         id: newUser.id,
         telegramId: newUser.telegramId,
         name: newUser.name,
+        timezone: newUser.timezone,
       });
 
       await ctx.reply(
@@ -60,6 +61,7 @@ export class TelegramMiddleware {
       id: user.id,
       telegramId: user.telegramId,
       name: user.name,
+      timezone: user.timezone,
     });
 
     return next();

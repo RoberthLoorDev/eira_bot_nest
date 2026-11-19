@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CategoriesRepository } from './categories.repository';
 import {
+  CategoryItem,
+  CategoryTypeValue,
   CreateCategoryInput,
   CreateCategoryResult,
   GroupedCategories,
@@ -12,6 +14,26 @@ const MAX_CATEGORY_NAME_LENGTH = 100;
 @Injectable()
 export class CategoriesService {
   constructor(private readonly categoriesRepository: CategoriesRepository) {}
+
+  async listActiveByUser(userId: string): Promise<CategoryItem[]> {
+    return this.categoriesRepository.findActiveByUserId(userId);
+  }
+
+  async listByUserAndType(
+    userId: string,
+    type: CategoryTypeValue,
+  ): Promise<CategoryItem[]> {
+    const categories =
+      await this.categoriesRepository.findActiveByUserId(userId);
+    return categories.filter((category) => category.type === type);
+  }
+
+  async findActiveById(
+    userId: string,
+    categoryId: string,
+  ): Promise<CategoryItem | null> {
+    return this.categoriesRepository.findActiveById(userId, categoryId);
+  }
 
   async listGroupedByUser(userId: string): Promise<GroupedCategories> {
     const categories =

@@ -4,6 +4,7 @@ export interface AuthenticatedUser {
   id: string;
   telegramId: bigint;
   name: string;
+  timezone: string;
 }
 
 export interface BotState {
@@ -22,7 +23,8 @@ function isAuthenticatedUser(value: unknown): value is AuthenticatedUser {
   return (
     typeof candidate.id === 'string' &&
     typeof candidate.telegramId === 'bigint' &&
-    typeof candidate.name === 'string'
+    typeof candidate.name === 'string' &&
+    typeof candidate.timezone === 'string'
   );
 }
 
@@ -56,7 +58,12 @@ export const CALLBACK_DATA = {
   CAT_LIST: 'cat:list',
   CAT_NEW: 'cat:new',
   CAT_TYPE_PREFIX: 'cat:type:',
-  REC_SOON_PREFIX: 'rec:soon:',
+  REC_NEW_PREFIX: 'rec:new:',
+  REC_TYPE_PREFIX: 'rec:type:',
+  REC_CAT_PREFIX: 'rec:cat:',
+  REC_CAT_CREATE: 'rec:cat_create',
+  REC_CONFIRM: 'rec:confirm',
+  REC_CHANGE_CAT: 'rec:cats',
   FLOW_CANCEL: 'flow:cancel',
 } as const;
 
