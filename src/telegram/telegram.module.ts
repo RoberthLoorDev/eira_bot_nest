@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
-import { TelegramService } from './telegram.service';
-import { UsersModule } from 'src/users/users.module';
+import { CategoriesModule } from '../categories/categories.module';
+import { ConversationModule } from '../conversation/conversation.module';
+import { UsersModule } from '../users/users.module';
 import { TelegramMiddleware } from './telegram.middleware';
+import { TelegramService } from './telegram.service';
 
 @Module({
-  imports: [UsersModule],
+  imports: [UsersModule, ConversationModule, CategoriesModule],
   providers: [TelegramService, TelegramMiddleware],
 })
 export class TelegramModule {}

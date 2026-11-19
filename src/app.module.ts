@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ConfigModule } from '@nestjs/config';
+import { CategoriesModule } from './categories/categories.module';
+import { ConversationModule } from './conversation/conversation.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { UsersModule } from './users/users.module';
@@ -14,6 +16,8 @@ import { UsersModule } from './users/users.module';
     PrismaModule,
     TelegramModule,
     UsersModule,
+    ConversationModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
