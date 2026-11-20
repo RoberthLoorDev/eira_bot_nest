@@ -3,5 +3,5 @@ allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
   prisma: true
-  protobufjs: set this to true or false
+  protobufjs: false
   unrs-resolver: true

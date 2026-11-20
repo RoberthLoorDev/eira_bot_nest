@@ -46,7 +46,7 @@ describe('AiService', () => {
     service = module.get<AiService>(AiService);
   });
 
-  it('uses Groq as primary provider and validates JSON with Zod', async () => {
+  it('uses Groq as primary provider and validates create_record JSON', async () => {
     groqProvider.extractJson.mockResolvedValue(
       JSON.stringify({
         intent: 'create_record',
@@ -55,6 +55,10 @@ describe('AiService', () => {
         description: 'Mando PS5',
         categoryName: 'Navidad',
         occurredAtDate: null,
+        startDate: null,
+        endDate: null,
+        compareStartDate: null,
+        compareEndDate: null,
       }),
     );
 
@@ -75,9 +79,54 @@ describe('AiService', () => {
         description: 'Mando PS5',
         categoryName: 'Navidad',
         occurredAtDate: null,
+        startDate: null,
+        endDate: null,
+        compareStartDate: null,
+        compareEndDate: null,
       },
     });
     expect(geminiProvider.extractJson).not.toHaveBeenCalled();
+  });
+
+  it('validates query_records and compare_records payloads', async () => {
+    groqProvider.extractJson.mockResolvedValue(
+      JSON.stringify({
+        intent: 'compare_records',
+        type: 'gasto',
+        amount: null,
+        description: null,
+        categoryName: 'Gastos generales',
+        occurredAtDate: null,
+        startDate: '2026-11-01',
+        endDate: '2026-11-20',
+        compareStartDate: '2026-10-01',
+        compareEndDate: '2026-10-31',
+      }),
+    );
+
+    const result = await service.extractRecord({
+      text: 'Compara mis gastos del mes pasado con este mes',
+      categories,
+      userTimezone: 'America/Guayaquil',
+      nowUtc: new Date('2026-11-20T21:00:00.000Z'),
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      provider: 'groq',
+      data: {
+        intent: 'compare_records',
+        type: 'gasto',
+        amount: null,
+        description: null,
+        categoryName: 'Gastos generales',
+        occurredAtDate: null,
+        startDate: '2026-11-01',
+        endDate: '2026-11-20',
+        compareStartDate: '2026-10-01',
+        compareEndDate: '2026-10-31',
+      },
+    });
   });
 
   it('falls back to Gemini when Groq fails with 429 or invalid JSON', async () => {
@@ -90,6 +139,10 @@ describe('AiService', () => {
         description: 'Sueldo',
         categoryName: 'Ingresos',
         occurredAtDate: '2026-11-18',
+        startDate: null,
+        endDate: null,
+        compareStartDate: null,
+        compareEndDate: null,
       }),
     );
 
@@ -110,6 +163,10 @@ describe('AiService', () => {
         description: 'Sueldo',
         categoryName: 'Ingresos',
         occurredAtDate: '2026-11-18',
+        startDate: null,
+        endDate: null,
+        compareStartDate: null,
+        compareEndDate: null,
       },
     });
   });

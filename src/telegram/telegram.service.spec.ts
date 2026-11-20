@@ -43,6 +43,8 @@ describe('TelegramService', () => {
           provide: RecordsService,
           useValue: {
             createForUser: jest.fn(),
+            queryByRange: jest.fn(),
+            compareRanges: jest.fn(),
           },
         },
         {

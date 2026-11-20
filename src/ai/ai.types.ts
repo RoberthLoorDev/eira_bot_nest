@@ -3,7 +3,11 @@ import {
   CategoryTypeValue,
 } from '../categories/categories.types';
 
-export type AiIntent = 'create_record' | 'unknown';
+export type AiIntent =
+  | 'create_record'
+  | 'query_records'
+  | 'compare_records'
+  | 'unknown';
 
 export interface ExtractedRecordPayload {
   intent: AiIntent;
@@ -12,6 +16,10 @@ export interface ExtractedRecordPayload {
   description: string | null;
   categoryName: string | null;
   occurredAtDate: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  compareStartDate: string | null;
+  compareEndDate: string | null;
 }
 
 export interface ExtractRecordInput {

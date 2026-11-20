@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CategoryItem } from '../categories/categories.types';
-import { getLocalDateString } from '../common/datetime.util';
+import {
+  getLocalDateString,
+  getLocalWeekdayName,
+  getRecentWeekdaysReference,
+} from '../common/datetime.util';
 import { GeminiProvider } from './gemini.provider';
 import { GroqProvider } from './groq.provider';
 import { extractedRecordSchema } from './ai.schema';
@@ -62,22 +66,39 @@ export class AiService {
 
   private buildSystemPrompt(input: ExtractRecordInput): string {
     const localToday = getLocalDateString(input.nowUtc, input.userTimezone);
+    const localWeekday = getLocalWeekdayName(input.nowUtc, input.userTimezone);
+    const recentWeekdays = getRecentWeekdaysReference(
+      input.nowUtc,
+      input.userTimezone,
+    );
     const categoryList = this.formatCategoryList(input.categories);
-    const typeRule = input.forcedType
+    const intentRule = input.forcedType
       ? `The user already selected type="${input.forcedType}". Always set intent="create_record" and type="${input.forcedType}".`
-      : 'Detect if the message is a financial movement (intent="create_record") or not (intent="unknown"). Set type to "gasto", "ingreso", "ahorro", or null if unclear.';
+      : [
+          'Classify intent into:',
+          '- "create_record": user wants to record a new expense, income, or saving.',
+          '- "query_records": user asks to view, list, or sum their movements for a date or date range.',
+          '- "compare_records": user asks to compare movements between two periods or two dates.',
+          '- "unknown": unrelated chat or greeting.',
+        ].join('\n');
 
     return [
-      'You extract personal finance records from Spanish text into strict JSON.',
-      `User local date today: ${localToday} (timezone: ${input.userTimezone}).`,
-      typeRule,
+      'You extract personal finance intents and dates from Spanish text into strict JSON.',
+      `User local today: ${localWeekday} ${localToday} (timezone: ${input.userTimezone}).`,
+      `Recent past weekdays: ${recentWeekdays}.`,
+      intentRule,
       `User existing categories: ${categoryList}`,
-      'Return ONLY a JSON object with keys: intent, type, amount, description, categoryName, occurredAtDate.',
+      'Return ONLY a JSON object with keys: intent, type, amount, description, categoryName, occurredAtDate, startDate, endDate, compareStartDate, compareEndDate.',
       'Rules:',
-      '- amount: positive decimal number in dollars (e.g. "25 centavos" -> 0.25, "50 ctvs" -> 0.5, "1,25" -> 1.25), or null if missing. Ignore street numbers or unrelated numbers.',
-      '- description: short clean summary of the item or reason, or null.',
-      '- categoryName: if the user mentions a category or budget name (e.g. "en Comida", "en Navidad", "para Navidad", "categoría Transporte"), return the matching existing category name if it exists, OR that exact mentioned name even if it is not in the existing categories list. Only return null if no category or budget is mentioned.',
-      '- occurredAtDate: "YYYY-MM-DD" in user local date only if user mentions a date (e.g. "ayer", "el lunes"), otherwise null.',
+      '- type: set "gasto" whenever user mentions gastos/gasté/compras, "ingreso" for ingresos/gané/sueldo, "ahorro" for ahorros/ahorré. Use null ONLY if user asks for all movements without specifying type.',
+      '- amount: for create_record, positive decimal number in dollars (e.g. "25 centavos" -> 0.25, "50 ctvs" -> 0.5, "1,25" -> 1.25), otherwise null. Ignore street or date numbers.',
+      '- description: for create_record, short clean summary, otherwise null.',
+      '- categoryName: if the user mentions a category or budget name (e.g. "en Comida", "en Navidad", "gastos hormiga"), return the matching existing category name if it exists, OR that exact mentioned name even if not in the list. Otherwise null.',
+      '- occurredAtDate: for create_record, "YYYY-MM-DD" in user local date only if user mentions a date (e.g. "ayer"), otherwise null.',
+      '- Date resolution rule: weekdays without year (e.g. "el jueves" when today is Friday) ALWAYS refer to the most recent PAST occurrence, NEVER the future. Weeks run Monday to Sunday.',
+      '- For query_records: set startDate and endDate ("YYYY-MM-DD", inclusive). Single day uses the same date for both. "este mes" = 1st of current month to today. "mes pasado" = full previous calendar month. "semana pasada" = previous Monday to Sunday. "hace dos semanas" = Monday to Sunday of two weeks ago.',
+      '- For compare_records: set compareStartDate/compareEndDate as the OLDER/baseline period (e.g. mes pasado) and startDate/endDate as the NEWER/target period (e.g. este mes).',
+      '- Set unused date fields to null.',
     ].join('\n');
   }
 

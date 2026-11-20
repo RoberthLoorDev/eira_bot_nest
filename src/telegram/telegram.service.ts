@@ -1,13 +1,20 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Telegraf } from 'telegraf';
 import { AiService } from '../ai/ai.service';
+import { ExtractedRecordPayload } from '../ai/ai.types';
 import { CategoriesService } from '../categories/categories.service';
 import {
   CategoryItem,
   CategoryTypeValue,
 } from '../categories/categories.types';
 import { parsePositiveAmount } from '../common/amount.util';
-import { parseLocalDateToUtc } from '../common/datetime.util';
+import {
+  getCurrentMonthLocalRange,
+  getLocalDateRangeUtc,
+  getPreviousMonthLocalRange,
+  isIsoDateString,
+  parseLocalDateToUtc,
+} from '../common/datetime.util';
 import { ConversationService } from '../conversation/conversation.service';
 import { RecordDraftPendingData } from '../conversation/conversation.types';
 import { RecordsService } from '../records/records.service';
@@ -25,6 +32,7 @@ import {
   formatRecordDraftCard,
   formatSavedRecordSummary,
 } from './telegram.menu';
+import { formatComparisonReport, formatQueryReport } from './telegram.reports';
 import {
   AuthenticatedUser,
   BotContext,
@@ -505,8 +513,30 @@ export class TelegramService implements OnModuleInit {
 
     if (extraction.data.intent === 'unknown' && !forcedType) {
       await ctx.reply(
-        `¡Hola, ${user.name}! Cuéntame un gasto, ingreso o ahorro (ej: "gasté $12 en almuerzo"), o usa el menú 👇`,
+        `¡Hola, ${user.name}! Cuéntame un gasto, ingreso, ahorro o pregúntame por tus movimientos (ej: "gastos de esta semana"), o usa el menú 👇`,
         buildMainMenuKeyboard(),
+      );
+      return;
+    }
+
+    if (extraction.data.intent === 'query_records' && !forcedType) {
+      await this.handleQueryRecordsIntent(
+        ctx,
+        user,
+        extraction.data,
+        categories,
+        nowUtc,
+      );
+      return;
+    }
+
+    if (extraction.data.intent === 'compare_records' && !forcedType) {
+      await this.handleCompareRecordsIntent(
+        ctx,
+        user,
+        extraction.data,
+        categories,
+        nowUtc,
       );
       return;
     }
@@ -526,6 +556,179 @@ export class TelegramService implements OnModuleInit {
     };
 
     await this.advanceRecordDraft(ctx, user, draft, false, true);
+  }
+
+  private async handleQueryRecordsIntent(
+    ctx: BotContext,
+    user: AuthenticatedUser,
+    payload: ExtractedRecordPayload,
+    categories: CategoryItem[],
+    nowUtc: Date,
+  ): Promise<void> {
+    const filter = this.resolveQueryCategoryFilter(
+      payload.categoryName,
+      payload.type ?? undefined,
+      categories,
+    );
+
+    if (filter.notFoundName) {
+      const available = categories
+        .map((c) => `• ${c.name} (${c.type})`)
+        .join('\n');
+      await ctx.reply(
+        `No encontré la categoría "${filter.notFoundName}".\n\nTus categorías activas son:\n${available}`,
+        buildMainMenuKeyboard(),
+      );
+      return;
+    }
+
+    const defaultRange = getCurrentMonthLocalRange(nowUtc, user.timezone);
+    const startStr = isIsoDateString(payload.startDate)
+      ? payload.startDate!
+      : defaultRange.startDate;
+    const endStr = isIsoDateString(payload.endDate)
+      ? payload.endDate!
+      : isIsoDateString(payload.startDate)
+        ? payload.startDate!
+        : defaultRange.endDate;
+
+    const rangeUtc = getLocalDateRangeUtc(startStr, endStr, user.timezone);
+    const summary = await this.recordsService.queryByRange({
+      userId: user.id,
+      startUtc: rangeUtc.startUtc,
+      endExclusiveUtc: rangeUtc.endExclusiveUtc,
+      type: filter.category ? undefined : (payload.type ?? undefined),
+      categoryId: filter.category?.id,
+    });
+
+    const report = formatQueryReport({
+      summary,
+      range: { startDate: rangeUtc.startDate, endDate: rangeUtc.endDate },
+      timezone: user.timezone,
+      type: payload.type ?? undefined,
+      categoryName: filter.category?.name,
+    });
+
+    await ctx.reply(report, buildMainMenuKeyboard());
+  }
+
+  private async handleCompareRecordsIntent(
+    ctx: BotContext,
+    user: AuthenticatedUser,
+    payload: ExtractedRecordPayload,
+    categories: CategoryItem[],
+    nowUtc: Date,
+  ): Promise<void> {
+    const filter = this.resolveQueryCategoryFilter(
+      payload.categoryName,
+      payload.type ?? undefined,
+      categories,
+    );
+
+    if (filter.notFoundName) {
+      const available = categories
+        .map((c) => `• ${c.name} (${c.type})`)
+        .join('\n');
+      await ctx.reply(
+        `No encontré la categoría "${filter.notFoundName}".\n\nTus categorías activas son:\n${available}`,
+        buildMainMenuKeyboard(),
+      );
+      return;
+    }
+
+    const defaultCurrent = getCurrentMonthLocalRange(nowUtc, user.timezone);
+    const defaultPrevious = getPreviousMonthLocalRange(nowUtc, user.timezone);
+
+    const currStart = isIsoDateString(payload.startDate)
+      ? payload.startDate!
+      : defaultCurrent.startDate;
+    const currEnd = isIsoDateString(payload.endDate)
+      ? payload.endDate!
+      : isIsoDateString(payload.startDate)
+        ? payload.startDate!
+        : defaultCurrent.endDate;
+
+    const prevStart = isIsoDateString(payload.compareStartDate)
+      ? payload.compareStartDate!
+      : defaultPrevious.startDate;
+    const prevEnd = isIsoDateString(payload.compareEndDate)
+      ? payload.compareEndDate!
+      : isIsoDateString(payload.compareStartDate)
+        ? payload.compareStartDate!
+        : defaultPrevious.endDate;
+
+    const prevRangeUtc = getLocalDateRangeUtc(
+      prevStart,
+      prevEnd,
+      user.timezone,
+    );
+    const currRangeUtc = getLocalDateRangeUtc(
+      currStart,
+      currEnd,
+      user.timezone,
+    );
+
+    const comparison = await this.recordsService.compareRanges(
+      {
+        userId: user.id,
+        startUtc: prevRangeUtc.startUtc,
+        endExclusiveUtc: prevRangeUtc.endExclusiveUtc,
+        type: filter.category ? undefined : (payload.type ?? undefined),
+        categoryId: filter.category?.id,
+      },
+      {
+        userId: user.id,
+        startUtc: currRangeUtc.startUtc,
+        endExclusiveUtc: currRangeUtc.endExclusiveUtc,
+        type: filter.category ? undefined : (payload.type ?? undefined),
+        categoryId: filter.category?.id,
+      },
+    );
+
+    const report = formatComparisonReport({
+      comparison,
+      previousRange: {
+        startDate: prevRangeUtc.startDate,
+        endDate: prevRangeUtc.endDate,
+      },
+      currentRange: {
+        startDate: currRangeUtc.startDate,
+        endDate: currRangeUtc.endDate,
+      },
+      type: payload.type ?? undefined,
+      categoryName: filter.category?.name,
+    });
+
+    await ctx.reply(report, buildMainMenuKeyboard());
+  }
+
+  private resolveQueryCategoryFilter(
+    categoryName: string | null,
+    type: CategoryTypeValue | undefined,
+    categories: CategoryItem[],
+  ): { category?: CategoryItem; notFoundName?: string } {
+    if (!categoryName) {
+      return {};
+    }
+
+    const normalized = categoryName.trim().toLowerCase();
+    const matched = categories.find(
+      (cat) =>
+        cat.name.toLowerCase() === normalized && (!type || cat.type === type),
+    );
+
+    if (matched) {
+      return { category: matched };
+    }
+
+    const fallbackAnyType = categories.find(
+      (cat) => cat.name.toLowerCase() === normalized,
+    );
+    if (fallbackAnyType) {
+      return { category: fallbackAnyType };
+    }
+
+    return { notFoundName: categoryName.trim() };
   }
 
   private async handleMissingAmountInput(

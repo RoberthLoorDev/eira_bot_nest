@@ -12,13 +12,13 @@
 
 ## 1. Onboarding, usuarios y flujo conversacional
 - [ ] **Términos y registro inicial**: al detectar un `telegramId` nuevo, mostrar Términos y Condiciones (link rápido en Notion al inicio, página propia después) antes de pedir el nombre; saludo cordial a usuarios existentes.
-- [ ] **Zonas horarias (UTC)**: ✅ guardado en UTC y conversión/formato a `user.timezone` con `date-fns-tz` en `records-ai`; pendiente: permitir cambiar la timezone al usuario.
+- [ ] **Zonas horarias (UTC)**: ✅ guardado en UTC y conversión/formato a `user.timezone` con `date-fns-tz` en `records-ai`; pendiente: preguntar país/ciudad en el registro inicial y permitir cambiar la timezone por comando, texto o nota de voz (ej. *"cámbiame la zona, estoy de vacaciones en Madrid"*).
 - [ ] **Menú guiado + confirmación conversacional**: ✅ menú completo, botones de movimientos y tarjeta previa con `[✅ Guardar] [🏷️ Cambiar categoría] [❌ Cancelar]`; pendiente: corregir categoría después de guardar.
 
 ## 2. Categorías, movimientos y consultas
 - [ ] **Categorías flexibles**: ✅ categorías por defecto (`gasto`, `ingreso`, `ahorro`), crear/listar por menú y elegir/crear por botones si falta al registrar (`records-ai`); pendiente: evaluar `inversion` y listar/ajustar por lenguaje natural (*"recuérdame mis categorías"*).
 - [x] **Registros por texto natural**: crear movimientos con contexto completo en 1 llamada de IA (ej. *"saldo de $25 de mando PS5 en Navidad"*).
-- [ ] **Consultas en lenguaje natural**: responder preguntas sobre gastos/ingresos por categoría o período (*hoy, ayer, últimos 10/15/30 días, mes pasado*).
+- [x] **Consultas en lenguaje natural**: responder preguntas sobre gastos/ingresos por categoría o período (*hoy, ayer, últimos 10/15/30 días, mes pasado*, fechas exactas, días de la semana y comparaciones entre períodos en `records-queries`).
 
 ## 3. Inteligencia financiera, alertas y reportes
 - [ ] **Límites de presupuesto y categorías vigiladas**: `budgetLimit` opcional por categoría con alertas progresivas sin bloquear gastos (preventiva ~80% 🟡, límite cercano/excedido 🔴) + flag de *"adviérteme sobre esta categoría"*.
@@ -35,3 +35,4 @@
 - [ ] **Monorepo + Web App (Dashboard SPA)**: convertir el repo en monorepo con una web de vista única (tablas y gráficos dinámicos que se adaptan a las categorías de cada usuario, filtros y chat integrado).
 - [ ] **App Móvil (React Native — Android e iOS)**: mismo dashboard con métricas filtrables, chat integrado y **widget en pantalla de inicio** para abrir micrófono o cámara en 1 toque.
 - [ ] **Despliegue en VPS propio**: montar backend y BD en un VPS (~2 GB RAM) cuidando librerías ligeras (especialmente al generar PDFs).
+- [ ] **Ayuda interactiva / enciclopedia de Eira (baja prioridad / futuro)**: responder preguntas de uso de la app (*"¿cómo cambio mi zona horaria?"*, *"¿cómo creo una categoría?"*, *"¿cómo consulto gastos?"*), evaluando una BD vectorial / RAG ligero solo para documentación de ayuda si el manual crece demasiado para un prompt.
