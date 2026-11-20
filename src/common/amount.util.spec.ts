@@ -11,9 +11,17 @@ describe('amount.util', () => {
 
   it('parses centavos expressions into dollar decimals', () => {
     expect(parsePositiveAmount('25 centavos')).toBe(0.25);
+    expect(parsePositiveAmount('25 centavos.')).toBe(0.25);
     expect(parsePositiveAmount('50 ctvs')).toBe(0.5);
     expect(parsePositiveAmount('5 centavo')).toBe(0.05);
     expect(parsePositiveAmount('25c')).toBe(0.25);
+  });
+
+  it('parses spoken voice phrases with currency and trailing punctuation', () => {
+    expect(parsePositiveAmount('Fueron 5 dólares.')).toBe(5);
+    expect(parsePositiveAmount('Me costó $12.50.')).toBe(12.5);
+    expect(parsePositiveAmount('3 dólares con 50 centavos.')).toBe(3.5);
+    expect(parsePositiveAmount('1 dolar con 25.')).toBe(1.25);
   });
 
   it('rejects zero, negative, or invalid inputs', () => {

@@ -16,7 +16,7 @@
 - [ ] **Menú guiado + confirmación conversacional**: ✅ menú completo, botones de movimientos y tarjeta previa con `[✅ Guardar] [🏷️ Cambiar categoría] [❌ Cancelar]`; pendiente: corregir categoría después de guardar.
 
 ## 2. Categorías, movimientos y consultas
-- [ ] **Categorías flexibles**: ✅ categorías por defecto (`gasto`, `ingreso`, `ahorro`), crear/listar por menú y elegir/crear por botones si falta al registrar (`records-ai`); pendiente: evaluar `inversion` y listar/ajustar por lenguaje natural (*"recuérdame mis categorías"*).
+- [ ] **Categorías flexibles**: ✅ categorías por defecto (`gasto`, `ingreso`, `ahorro`), crear/listar por menú, texto o voz y elegir/crear por botones si falta al registrar; pendiente: evaluar `inversion` y editar/eliminar categorías.
 - [x] **Registros por texto natural**: crear movimientos con contexto completo en 1 llamada de IA (ej. *"saldo de $25 de mando PS5 en Navidad"*).
 - [x] **Consultas en lenguaje natural**: responder preguntas sobre gastos/ingresos por categoría o período (*hoy, ayer, últimos 10/15/30 días, mes pasado*, fechas exactas, días de la semana y comparaciones entre períodos en `records-queries`).
 
@@ -26,7 +26,7 @@
 - [ ] **Resumen automático mensual + mejores prácticas**: informe enviado el día 1 de cada mes con resumen del mes anterior, análisis de gastos hormiga innecesarios y consejos basados en buenas prácticas de finanzas personales.
 
 ## 4. Multimodal (Audio, Fotos y PDF)
-- [ ] **Entrada por notas de voz (STT)**: transcribir audios para registrar o consultar directamente sin abrir menús.
+- [x] **Entrada por notas de voz (STT)**: transcribir audios con Groq `whisper-large-v3-turbo` (máx. 30s, `.ogg` directo sin `ffmpeg`) conectados al mismo flujo de registro, consultas y comparaciones (`voice-stt`).
 - [ ] **Respuestas en audio (TTS, opcional/bajo costo)**: que Eira pueda responder con notas de voz en Telegram, Web y Móvil; investigar opciones gratuitas o muy económicas frente a alternativas caras como ElevenLabs.
 - [ ] **Lectura de fotos**: interpretar facturas de compra y comprobantes de depósito/transferencia bancaria (distinguiendo gasto vs ingreso sin conectar cuentas bancarias).
 - [ ] **Soporte y generación de PDF**: leer PDFs enviados por el usuario y generar reportes PDF mensuales con alertas de presupuesto y detalle de gastos hormiga.

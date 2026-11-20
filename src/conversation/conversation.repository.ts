@@ -11,6 +11,7 @@ import {
 
 const VALID_PENDING_ACTIONS: ReadonlySet<string> = new Set<PendingAction>([
   'awaiting_category_name',
+  'awaiting_category_type',
   'awaiting_record_input',
   'awaiting_record_amount',
   'awaiting_record_type',

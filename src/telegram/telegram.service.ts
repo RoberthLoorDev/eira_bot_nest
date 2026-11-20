@@ -42,6 +42,8 @@ import {
   SHORT_GREETINGS,
 } from './telegram.types';
 
+const MAX_VOICE_DURATION_SECONDS = 30;
+
 @Injectable()
 export class TelegramService implements OnModuleInit {
   private readonly logger = new Logger(TelegramService.name);
@@ -167,6 +169,23 @@ export class TelegramService implements OnModuleInit {
         return;
       }
       const selectedType = ctx.match[1] as CategoryTypeValue;
+      const active = await this.conversationService.getActiveState(user.id);
+      const pendingCatName =
+        active.state?.pendingAction === 'awaiting_category_type'
+          ? active.state.pendingData?.suggestedCategoryName
+          : undefined;
+
+      if (pendingCatName) {
+        await ctx.answerCbQuery();
+        await this.handleCategoryNameInput(
+          ctx,
+          user,
+          pendingCatName,
+          selectedType,
+        );
+        return;
+      }
+
       const promptMsg = `Perfecto. Escribe el nombre para tu nueva categoría de ${selectedType} (ej: Comida, Transporte):`;
 
       await this.conversationService.setState({
@@ -420,48 +439,29 @@ export class TelegramService implements OnModuleInit {
       if (!user) {
         return;
       }
+      await this.processTextInput(ctx, user, ctx.message.text.trim());
+    });
 
-      const rawText = ctx.message.text.trim();
-      const active = await this.conversationService.getActiveState(user.id);
-
-      if (active.state && rawText.startsWith('/')) {
-        await this.conversationService.clearState(user.id);
-        await ctx.reply(buildMainMenuText(user.name), buildMainMenuKeyboard());
+    this.bot.on('voice', async (ctx) => {
+      const user = getAuthenticatedUser(ctx);
+      if (!user) {
         return;
       }
 
-      if (active.state?.pendingAction === 'awaiting_category_name') {
-        const categoryType = active.state.pendingData?.type;
-        if (!categoryType) {
-          await this.sendMainMenu(ctx);
-          return;
-        }
-        await this.handleCategoryNameInput(ctx, user, rawText, categoryType);
-        return;
-      }
-
-      if (active.state?.pendingAction === 'awaiting_record_input') {
-        const forcedType = active.state.pendingData?.type;
-        await this.handleRecordTextExtraction(ctx, user, rawText, forcedType);
-        return;
-      }
-
-      if (active.state?.pendingAction === 'awaiting_record_amount') {
-        await this.handleMissingAmountInput(
-          ctx,
-          user,
-          rawText,
-          active.state.pendingData ?? {},
+      const voice = ctx.message.voice;
+      if (voice.duration > MAX_VOICE_DURATION_SECONDS) {
+        await ctx.reply(
+          `La nota de voz supera el límite de ${MAX_VOICE_DURATION_SECONDS} segundos. Por favor, envíame un audio más corto o escríbelo por texto.`,
         );
         return;
       }
 
-      if (this.isShortGreeting(rawText)) {
-        await ctx.reply(buildMainMenuText(user.name), buildMainMenuKeyboard());
-        return;
-      }
-
-      await this.handleRecordTextExtraction(ctx, user, rawText);
+      await this.handleVoiceInput(
+        ctx,
+        user,
+        voice.file_id,
+        voice.mime_type ?? 'audio/ogg',
+      );
     });
 
     this.bot.on('message', async (ctx) => {
@@ -480,10 +480,136 @@ export class TelegramService implements OnModuleInit {
       }
 
       await ctx.reply(
-        'Por ahora solo proceso mensajes de texto o botones del menú 👇',
+        'Por ahora solo proceso mensajes de texto, notas de voz o botones del menú 👇',
         buildMainMenuKeyboard(),
       );
     });
+  }
+
+  private async processTextInput(
+    ctx: BotContext,
+    user: AuthenticatedUser,
+    rawText: string,
+  ): Promise<void> {
+    const active = await this.conversationService.getActiveState(user.id);
+
+    if (active.state && rawText.startsWith('/')) {
+      await this.conversationService.clearState(user.id);
+      await ctx.reply(buildMainMenuText(user.name), buildMainMenuKeyboard());
+      return;
+    }
+
+    if (active.state?.pendingAction === 'awaiting_category_name') {
+      const categoryType = active.state.pendingData?.type;
+      if (!categoryType) {
+        await this.sendMainMenu(ctx);
+        return;
+      }
+      await this.handleCategoryNameInput(ctx, user, rawText, categoryType);
+      return;
+    }
+
+    if (active.state?.pendingAction === 'awaiting_category_type') {
+      await this.handlePendingCategoryTypeInput(
+        ctx,
+        user,
+        rawText,
+        active.state.pendingData?.suggestedCategoryName,
+      );
+      return;
+    }
+
+    if (active.state?.pendingAction === 'awaiting_record_input') {
+      const forcedType = active.state.pendingData?.type;
+      await this.handleRecordTextExtraction(ctx, user, rawText, forcedType);
+      return;
+    }
+
+    if (active.state?.pendingAction === 'awaiting_record_amount') {
+      await this.handleMissingAmountInput(
+        ctx,
+        user,
+        rawText,
+        active.state.pendingData ?? {},
+      );
+      return;
+    }
+
+    if (active.state?.pendingAction === 'awaiting_record_type') {
+      await this.handlePendingRecordTypeInput(
+        ctx,
+        user,
+        rawText,
+        active.state.pendingData ?? {},
+      );
+      return;
+    }
+
+    if (active.state?.pendingAction === 'awaiting_record_category') {
+      await this.handlePendingRecordCategoryInput(
+        ctx,
+        user,
+        rawText,
+        active.state.pendingData ?? {},
+      );
+      return;
+    }
+
+    if (this.isShortGreeting(rawText)) {
+      await ctx.reply(buildMainMenuText(user.name), buildMainMenuKeyboard());
+      return;
+    }
+
+    await this.handleRecordTextExtraction(ctx, user, rawText);
+  }
+
+  private async handleVoiceInput(
+    ctx: BotContext,
+    user: AuthenticatedUser,
+    fileId: string,
+    mimeType: string,
+  ): Promise<void> {
+    try {
+      await ctx.sendChatAction('typing');
+    } catch {
+      // Ignore transient typing indicator failures.
+    }
+
+    let audioBuffer: Buffer;
+    try {
+      const fileLink = await ctx.telegram.getFileLink(fileId);
+      const response = await fetch(fileLink.href);
+      if (!response.ok) {
+        throw new Error(`Telegram download HTTP ${response.status}`);
+      }
+      audioBuffer = Buffer.from(await response.arrayBuffer());
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown download error';
+      this.logger.warn(`Failed to download Telegram voice: ${message}`);
+      await ctx.reply(
+        'No pude descargar tu nota de voz. Intenta enviarla de nuevo o escríbelo por texto.',
+      );
+      return;
+    }
+
+    const transcription = await this.aiService.transcribeAudio({
+      audioBuffer,
+      filename: 'voice.ogg',
+      mimeType,
+      language: 'es',
+    });
+
+    if (!transcription.ok) {
+      const replyText =
+        transcription.reason === 'empty_transcription'
+          ? 'No logré escuchar texto claro en tu nota de voz. Intenta grabarla de nuevo o escríbelo por texto.'
+          : 'Tuve un problema temporal para transcribir tu audio. Intenta de nuevo en unos segundos o escríbelo por texto.';
+      await ctx.reply(replyText);
+      return;
+    }
+
+    await this.processTextInput(ctx, user, transcription.text);
   }
 
   private async handleRecordTextExtraction(
@@ -516,6 +642,20 @@ export class TelegramService implements OnModuleInit {
         `¡Hola, ${user.name}! Cuéntame un gasto, ingreso, ahorro o pregúntame por tus movimientos (ej: "gastos de esta semana"), o usa el menú 👇`,
         buildMainMenuKeyboard(),
       );
+      return;
+    }
+
+    if (extraction.data.intent === 'list_categories' && !forcedType) {
+      const grouped = await this.categoriesService.listGroupedByUser(user.id);
+      await ctx.reply(
+        formatGroupedCategories(grouped),
+        buildCategoriesListKeyboard(),
+      );
+      return;
+    }
+
+    if (extraction.data.intent === 'create_category' && !forcedType) {
+      await this.handleCreateCategoryIntent(ctx, user, extraction.data);
       return;
     }
 
@@ -556,6 +696,85 @@ export class TelegramService implements OnModuleInit {
     };
 
     await this.advanceRecordDraft(ctx, user, draft, false, true);
+  }
+
+  private async handleCreateCategoryIntent(
+    ctx: BotContext,
+    user: AuthenticatedUser,
+    payload: ExtractedRecordPayload,
+  ): Promise<void> {
+    const name = payload.categoryName?.trim();
+    const type = payload.type;
+
+    if (!name) {
+      await ctx.reply(
+        '¿Qué tipo de categoría deseas crear?',
+        buildCategoryTypeKeyboard(),
+      );
+      return;
+    }
+
+    if (!type) {
+      await this.conversationService.setState({
+        userId: user.id,
+        pendingAction: 'awaiting_category_type',
+        pendingData: { suggestedCategoryName: name },
+      });
+      await ctx.reply(
+        `¿De qué tipo quieres crear la categoría "${name}"?`,
+        buildCategoryTypeKeyboard(),
+      );
+      return;
+    }
+
+    await this.handleCategoryNameInput(ctx, user, name, type);
+  }
+
+  private async handlePendingCategoryTypeInput(
+    ctx: BotContext,
+    user: AuthenticatedUser,
+    rawText: string,
+    suggestedName?: string,
+  ): Promise<void> {
+    if (!suggestedName) {
+      await this.sendMainMenu(ctx);
+      return;
+    }
+
+    const detectedType = this.detectCategoryTypeFromText(rawText);
+    if (!detectedType) {
+      await ctx.reply(
+        `Dime o elige si "${suggestedName}" es de tipo gasto, ingreso o ahorro:`,
+        buildCategoryTypeKeyboard(),
+      );
+      return;
+    }
+
+    await this.handleCategoryNameInput(ctx, user, suggestedName, detectedType);
+  }
+
+  private detectCategoryTypeFromText(
+    rawText: string,
+  ): CategoryTypeValue | null {
+    const normalized = rawText.trim().toLowerCase();
+    if (
+      /\b(gasto|gastos|gast[eé]|compra|compr[eé]|pago|pagu[eé])\b/.test(
+        normalized,
+      )
+    ) {
+      return 'gasto';
+    }
+    if (
+      /\b(ingreso|ingresos|gan[eé]|sueldo|cobr[eé]|dep[oó]sito)\b/.test(
+        normalized,
+      )
+    ) {
+      return 'ingreso';
+    }
+    if (/\b(ahorro|ahorros|ahorr[eé])\b/.test(normalized)) {
+      return 'ahorro';
+    }
+    return null;
   }
 
   private async handleQueryRecordsIntent(
@@ -737,16 +956,124 @@ export class TelegramService implements OnModuleInit {
     rawText: string,
     draft: RecordDraftPendingData,
   ): Promise<void> {
-    const amount = parsePositiveAmount(rawText);
+    let amount = parsePositiveAmount(rawText);
+
+    // Fall back to a single AI extraction for spoken word numbers (e.g. "cinco dólares con cincuenta").
+    if (amount === null) {
+      const extraction = await this.aiService.extractRecord({
+        text: rawText,
+        categories: [],
+        userTimezone: user.timezone,
+        nowUtc: new Date(),
+        forcedType: draft.type ?? 'gasto',
+      });
+      if (
+        extraction.ok &&
+        extraction.data.amount &&
+        extraction.data.amount > 0
+      ) {
+        amount = extraction.data.amount;
+      }
+    }
+
     if (amount === null) {
       await ctx.reply(
-        'Envíame un monto válido mayor a 0 (ej: 15, 0.25 o "25 centavos"):',
+        'No logré entender el monto. Dime o escríbeme un valor mayor a 0 (ej: 15, 0.25 o "25 centavos"):',
         buildCancelKeyboard(),
       );
       return;
     }
 
-    await this.advanceRecordDraft(ctx, user, { ...draft, amount }, false);
+    await this.advanceRecordDraft(ctx, user, { ...draft, amount }, false, true);
+  }
+
+  private async handlePendingRecordTypeInput(
+    ctx: BotContext,
+    user: AuthenticatedUser,
+    rawText: string,
+    draft: RecordDraftPendingData,
+  ): Promise<void> {
+    const normalized = rawText.trim().toLowerCase();
+    let detectedType: CategoryTypeValue | null = null;
+
+    if (
+      /\b(gasto|gast[eé]|compra|compr[eé]|pago|pagu[eé])\b/.test(normalized)
+    ) {
+      detectedType = 'gasto';
+    } else if (
+      /\b(ingreso|gan[eé]|sueldo|cobr[eé]|dep[oó]sito)\b/.test(normalized)
+    ) {
+      detectedType = 'ingreso';
+    } else if (/\b(ahorro|ahorr[eé])\b/.test(normalized)) {
+      detectedType = 'ahorro';
+    }
+
+    if (!detectedType) {
+      await ctx.reply(
+        'Dime o elige si es un gasto, ingreso o ahorro:',
+        buildRecordTypeKeyboard(),
+      );
+      return;
+    }
+
+    await this.advanceRecordDraft(
+      ctx,
+      user,
+      { ...draft, type: detectedType },
+      false,
+      true,
+    );
+  }
+
+  private async handlePendingRecordCategoryInput(
+    ctx: BotContext,
+    user: AuthenticatedUser,
+    rawText: string,
+    draft: RecordDraftPendingData,
+  ): Promise<void> {
+    const cleanedName = rawText
+      .trim()
+      .replace(/[.!?]+$/g, '')
+      .replace(/^(?:en\s+)?(?:la\s+)?(?:categor[ií]a\s+)?/i, '')
+      .trim();
+
+    if (!cleanedName) {
+      await this.advanceRecordDraft(ctx, user, draft, false, true);
+      return;
+    }
+
+    const type = draft.type ?? 'gasto';
+    const typeCategories = await this.categoriesService.listByUserAndType(
+      user.id,
+      type,
+    );
+    const matched = typeCategories.find(
+      (cat) => cat.name.toLowerCase() === cleanedName.toLowerCase(),
+    );
+
+    if (matched) {
+      await this.advanceRecordDraft(
+        ctx,
+        user,
+        {
+          ...draft,
+          categoryId: matched.id,
+          categoryName: matched.name,
+          suggestedCategoryName: undefined,
+        },
+        false,
+        true,
+      );
+      return;
+    }
+
+    await this.advanceRecordDraft(
+      ctx,
+      user,
+      { ...draft, suggestedCategoryName: cleanedName },
+      false,
+      true,
+    );
   }
 
   private async advanceRecordDraft(
@@ -932,9 +1259,13 @@ export class TelegramService implements OnModuleInit {
     rawText: string,
     categoryType: CategoryTypeValue,
   ): Promise<void> {
+    const cleanedName = rawText
+      .trim()
+      .replace(/[.!?]+$/g, '')
+      .trim();
     const result = await this.categoriesService.createForUser({
       userId: user.id,
-      name: rawText,
+      name: cleanedName,
       type: categoryType,
     });
 

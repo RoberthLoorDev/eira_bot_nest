@@ -13,6 +13,8 @@ import {
   ExtractedRecordPayload,
   ExtractRecordInput,
   ExtractRecordResult,
+  TranscribeAudioInput,
+  TranscribeAudioResult,
 } from './ai.types';
 
 @Injectable()
@@ -44,6 +46,24 @@ export class AiService {
     }
 
     return { ok: false, reason: 'ai_unavailable' };
+  }
+
+  async transcribeAudio(
+    input: TranscribeAudioInput,
+  ): Promise<TranscribeAudioResult> {
+    try {
+      const rawText = await this.groqProvider.transcribeAudio(input);
+      const trimmed = rawText.trim();
+      if (!trimmed) {
+        return { ok: false, reason: 'empty_transcription' };
+      }
+      return { ok: true, text: trimmed };
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown STT error';
+      this.logger.warn(`Groq Whisper transcription failed: ${message}`);
+      return { ok: false, reason: 'stt_unavailable' };
+    }
   }
 
   private parseAndValidate(
@@ -79,6 +99,8 @@ export class AiService {
           '- "create_record": user wants to record a new expense, income, or saving.',
           '- "query_records": user asks to view, list, or sum their movements for a date or date range.',
           '- "compare_records": user asks to compare movements between two periods or two dates.',
+          '- "list_categories": user asks to list, show, or remind them of their categories.',
+          '- "create_category": user wants to create or add a new category (put the requested name in categoryName and type if mentioned).',
           '- "unknown": unrelated chat or greeting.',
         ].join('\n');
 

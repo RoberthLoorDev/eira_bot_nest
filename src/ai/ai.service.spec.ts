@@ -7,6 +7,7 @@ import { GroqProvider } from './groq.provider';
 interface MockAiProvider {
   name: string;
   extractJson: jest.Mock<Promise<string>, [string, string]>;
+  transcribeAudio?: jest.Mock<Promise<string>, [unknown]>;
 }
 
 describe('AiService', () => {
@@ -29,6 +30,7 @@ describe('AiService', () => {
     groqProvider = {
       name: 'groq',
       extractJson: jest.fn<Promise<string>, [string, string]>(),
+      transcribeAudio: jest.fn<Promise<string>, [unknown]>(),
     };
     geminiProvider = {
       name: 'gemini',
@@ -183,5 +185,42 @@ describe('AiService', () => {
     });
 
     expect(result).toEqual({ ok: false, reason: 'ai_unavailable' });
+  });
+
+  it('transcribes audio using Groq Whisper and trims text', async () => {
+    groqProvider.transcribeAudio?.mockResolvedValue('  Gasté 5 en café  ');
+
+    const result = await service.transcribeAudio({
+      audioBuffer: Buffer.from('ogg-bytes'),
+      filename: 'voice.ogg',
+      mimeType: 'audio/ogg',
+      language: 'es',
+    });
+
+    expect(result).toEqual({ ok: true, text: 'Gasté 5 en café' });
+  });
+
+  it('returns empty_transcription when audio produces blank text', async () => {
+    groqProvider.transcribeAudio?.mockResolvedValue('   ');
+
+    const result = await service.transcribeAudio({
+      audioBuffer: Buffer.from('ogg-bytes'),
+      filename: 'voice.ogg',
+      mimeType: 'audio/ogg',
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'empty_transcription' });
+  });
+
+  it('returns stt_unavailable when Groq Whisper throws', async () => {
+    groqProvider.transcribeAudio?.mockRejectedValue(new Error('429 limit'));
+
+    const result = await service.transcribeAudio({
+      audioBuffer: Buffer.from('ogg-bytes'),
+      filename: 'voice.ogg',
+      mimeType: 'audio/ogg',
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'stt_unavailable' });
   });
 });

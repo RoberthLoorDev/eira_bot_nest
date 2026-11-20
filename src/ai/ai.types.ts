@@ -7,6 +7,8 @@ export type AiIntent =
   | 'create_record'
   | 'query_records'
   | 'compare_records'
+  | 'list_categories'
+  | 'create_category'
   | 'unknown';
 
 export interface ExtractedRecordPayload {
@@ -37,4 +39,20 @@ export type ExtractRecordResult =
 export interface AiExtractionProvider {
   readonly name: string;
   extractJson(systemPrompt: string, userMessage: string): Promise<string>;
+}
+
+export interface TranscribeAudioInput {
+  audioBuffer: Buffer;
+  filename: string;
+  mimeType: string;
+  language?: string;
+}
+
+export type TranscribeAudioResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: 'empty_transcription' | 'stt_unavailable' };
+
+export interface AiTranscriptionProvider {
+  readonly name: string;
+  transcribeAudio(input: TranscribeAudioInput): Promise<string>;
 }

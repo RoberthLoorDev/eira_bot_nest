@@ -11,6 +11,8 @@ export const extractedRecordSchema = z.object({
     'create_record',
     'query_records',
     'compare_records',
+    'list_categories',
+    'create_category',
     'unknown',
   ]),
   type: z.enum(['gasto', 'ingreso', 'ahorro']).nullable().catch(null),

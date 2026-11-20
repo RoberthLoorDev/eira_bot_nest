@@ -51,6 +51,7 @@ describe('TelegramService', () => {
           provide: AiService,
           useValue: {
             extractRecord: jest.fn(),
+            transcribeAudio: jest.fn(),
           },
         },
       ],
